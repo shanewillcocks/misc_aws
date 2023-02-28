@@ -3,8 +3,8 @@
 # Clean Up AWS Resources:
 # 1. Available EBS Volumes
 # 2. RDS Snapshots older than 33 days
-# 3. Packer AMI's older than 7 days
-# 4. Temporary Packer Security Groups
+# 3. AMI's older than 7 days
+# 4. Temporary Security Groups
 # 5. Backup vault recovery points
 # 6. EBS Snapshots
 #-----------------------------------------
@@ -67,30 +67,42 @@ delete_rds_snapshots () {
 
 # Only deregister an AMI if creation date is older than 7 days
 deregister_packer_amis () {
-  packer_amis=$(aws ec2 describe-images --filters "Name=owner-id,Values=${aws_id}" "Name=tag:Name,Values=Packer*"|jq '.Images')
-  packer_ami_count=$(echo ${packer_amis}|jq length)
-  dereg_count=0
-  echo "Found ${packer_ami_count} AMIs"
-  for ((count=0; count < ${packer_ami_count}; ++count))
-  do
-    ami_name=$(echo $packer_amis|jq ".[$count].ImageId"|sed 's/\"//g')
-    ami_date=$(echo $packer_amis|jq ".[$count].CreationDate"|sed 's/\"//g')
-    ami_ts=$(date -d "${ami_date}" +%s)
-    delta=$((${epoch_ts} - ${ami_ts}))
-    if [ ${delta} -gt 604800 ]; then
-      echo "Deregistering AMI ${ami_name}"
-      aws ec2 deregister-image --image-id ${ami_name} >/dev/null 2>&1
-      rc=$?
-      if [ ${rc} -eq 0 ]; then
-        echo "Deregister successful"
-        dereg_count=$(($dereg_count+1))
-      else
-        echo "Deregister failed: ${rc}"
+  prefixes=("rhel88-stable" "rhel8-unstable" "rhel7-stable" "rhel7-unstable")
+  for prefix in "${prefixes[@]}"; do
+    # Array  to store the image IDs to deregister
+    deregister_images=()
+    # Query AWS for owned images for each prefix reverse sorted by CreationDate
+    images=$(aws ec2 describe-images --owners self --filters "Name=name,Values=${prefix}*" --query 'reverse(sort_by(Images, &CreationDate))')
+    image_count=$(echo $images | jq length)
+    echo "Checking ${image_count} image(s) for ${prefix}"
+    for ((count=0; count < ${image_count}; ++count)); do
+      name=$(echo ${images} | jq ".[$count].Name " | sed 's/\"//g')
+      image_id=$(echo ${images} | jq ".[$count].ImageId" | sed 's/\"//g')
+      creation_date=$(echo ${images} | jq ".[$count].CreationDate" | sed 's/\"//g')
+      image_ts=$(date -d "${creation_date}" +%s)
+      delta=$((${epoch_ts} - ${image_ts}))
+      if [ ${delta} -gt 604800 ]; then
+        echo "Image ${image_id} is older than 7 days"
+        deregister_images+=("${image_id}")
       fi
-      sleep 1
+    done
+    deregister_count="${#deregister_images[@]}"
+    # Deregister the images if there are 2 or more images with the same prefix, leaving the newest image
+    if [ ${deregister_count} -ge 2 ]; then
+     for image_id in "${deregister_images[@]:1}"; do
+       echo "Deregistering image ${image_id}"
+       aws ec2 deregister-image --image-id ${image_id} >/dev/null 2>&1
+        rc=$?
+        if [ ${rc} -eq 0 ]; then
+          echo "Deregistration successful"
+        else
+          echo "Deregistration failed: ${rc}"
+        fi
+     done
     fi
+    unset deregister_images
   done
-  echo "Deregistered ${dereg_count} Packer AMIs"
+  echo "AMI deregistration complete"
 }
 
 delete_packer_security_groups () {
@@ -175,11 +187,11 @@ echo "1. Cleaning up available EBS volumes"
 delete_ebs_volumes
 echo "2. Cleaning up RDS snapshots older than 33 days"
 delete_rds_snapshots
-echo "3. Cleaning up temporary Packer security groups"
+echo "3. Cleaning up temporary security groups"
 delete_packer_security_groups
 echo "4. Cleaning up backup vault recovery points"
 delete_vault_recovery_points
-echo "5. Cleaning up Packer AMIs older than 7 days"
+echo "5. Cleaning up AMIs older than 7 days"
 deregister_packer_amis
 echo "6. Cleaning up orphaned EBS snapshots"
 delete_ebs_snapshots
