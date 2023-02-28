@@ -89,16 +89,16 @@ deregister_packer_amis () {
     deregister_count="${#deregister_images[@]}"
     # Deregister the images if there are 2 or more images with the same prefix, leaving the newest image
     if [ ${deregister_count} -ge 2 ]; then
-     for image_id in "${deregister_images[@]:1}"; do
-       echo "Deregistering image ${image_id}"
-       aws ec2 deregister-image --image-id ${image_id} >/dev/null 2>&1
+      for image_id in "${deregister_images[@]:1}"; do
+        echo "Deregistering image ${image_id}"
+        aws ec2 deregister-image --image-id ${image_id} >/dev/null 2>&1
         rc=$?
         if [ ${rc} -eq 0 ]; then
           echo "Deregistration successful"
         else
           echo "Deregistration failed: ${rc}"
         fi
-     done
+      done
     fi
     unset deregister_images
   done
@@ -110,7 +110,7 @@ delete_packer_security_groups () {
   delete_count=0
   for packer_sg in $security_groups
   do
-    echo "Deleting Packer security group ${packer_sg}"
+    echo "Deleting security group ${packer_sg}"
     aws ec2 delete-security-group --group-id ${packer_sg} >/dev/null 2>&1
     rc=$?
     if [ ${rc} -eq 0 ]; then
@@ -121,7 +121,7 @@ delete_packer_security_groups () {
     fi
     sleep 1
   done
-  echo "Deleted ${delete_count} Packer security groups"
+  echo "Deleted ${delete_count} security groups"
 }
 
 # This is needed to delete EBS snapshots created by AWS backup
@@ -195,6 +195,6 @@ echo "5. Cleaning up AMIs older than 7 days"
 deregister_packer_amis
 echo "6. Cleaning up orphaned EBS snapshots"
 delete_ebs_snapshots
-echo "7. Deleting Packer temporary keypairs"
+echo "7. Deleting temporary keypairs"
 delete_packer_keypairs
 exit
