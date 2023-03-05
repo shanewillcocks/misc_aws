@@ -48,7 +48,7 @@ delete_rds_instances () {
   #aws rds delete-db-instance --db-instance-identifier ${rds_id} --skip-final-snapshot --delete-automated-backups >/dev/null 2>&1
   rc=$?
   if [ ${rc} -eq 0 ]; then
-    echo "RDS instance ${rds_id} deleted"
+    echo "RDS instance ${rds_id} deletion started, this may take several minutes to complete"
   else
     echo "Deleting RDS instance ${rds_id} may have failed, returned code: ${rc}"
   fi
