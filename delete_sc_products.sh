@@ -2,14 +2,12 @@
 #---------------------------------------------------------------
 # Function to delete AMI transporter products provisioned via
 # the AWS Service Catalog
-# Set ami_transporter_id to correct Service Catalog ID
 #---------------------------------------------------------------
 delete_provisioned_products () {
   epoch_ts=$(date +'%s')
   # Only delete provisioned AMI Transporter products
-  ami_transporter_id=prod-ss2uoc263tvt6
+  ami_transporter_id=$(aws servicecatalog search-products --query "ProductViewSummaries[?Name=='AMI Transporter'].[ProductId]" --output text)
   delete_count=0
-
   provisioned_products=$(aws servicecatalog scan-provisioned-products | jq '.ProvisionedProducts')
   product_count=$(echo ${provisioned_products} | jq length)
   echo "Checking ${product_count} provisioned products"
